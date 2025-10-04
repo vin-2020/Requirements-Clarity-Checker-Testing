@@ -308,7 +308,7 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .req-container { padding:10px;border-radius:5px;margin-bottom:10px;border:1px solid #ddd; }
+    .req-column { padding:10px;border-radius:5px;margin-bottom:10px;border:1px solid #ddd; }
     .flagged { background:#FFF3CD;color:#856404;border-color:#FFEEBA; }
     .clear { background:#D4EDDA;color:#155724;border-color:#C3E6CB; }
     .highlight-ambiguity { background:#FFFF00;color:black;padding:2px 4px;border-radius:3px; }
@@ -331,7 +331,7 @@ with st.sidebar:
     # Top: logo
     st.image(
         "https://github.com/vin-2020/Requirements-Clarity-Checker/blob/main/ReqCheck_Logo.png?raw=true",
-        use_container_width=True
+        use_column_width=True
     )
 
     # Catchphrase (pick one from below)

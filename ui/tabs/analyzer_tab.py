@@ -952,12 +952,17 @@ Parent requirement:
                     st.subheader("Issues by Type")
                     st.bar_chart(issue_counts)
 
-                    # Word cloud of ambiguous terms
+                    # ---------- REPLACED INNER EXPANDER WITH A TOGGLE (fix nesting) ----------
                     all_ambiguous_words = []
                     for r in results:
                         if r["ambiguous"]:
                             all_ambiguous_words.extend(r["ambiguous"])
-                    with st.expander("Common Weak Words (Word Cloud)"):
+
+                    # Use a stable, unique key per document
+                    wc_key = f"wc_toggle_{re.sub(r'[^a-zA-Z0-9_]+','_', str(display_name))}"
+                    show_wc = st.toggle("Show common weak words (word cloud)", key=wc_key)
+
+                    if show_wc:
                         if all_ambiguous_words:
                             text_for_cloud = " ".join(all_ambiguous_words)
                             wordcloud = WordCloud(
@@ -969,6 +974,7 @@ Parent requirement:
                             st.pyplot(fig)
                         else:
                             st.write("No ambiguous words found.")
+                    # ------------------------------------------------------------------------
 
                     st.subheader("Detailed Analysis")
                     for r in results:

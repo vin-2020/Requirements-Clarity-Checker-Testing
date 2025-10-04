@@ -1,0 +1,124 @@
+{
+  "name": "INCOSE Default Rules",
+  "description": "A general-purpose rule set based on INCOSE best practices.",
+  "rules": {
+    "ambiguity": {
+      "enabled": true,
+      "penalty": 15,
+      "words": [
+        "about",
+        "adequate",
+        "and/or",
+        "appropriate",
+        "approximately",
+        "as a minimum",
+        "as applicable",
+        "as required",
+        "be able to",
+        "be capable of",
+        "best",
+        "better",
+        "could",
+        "easy",
+        "effective",
+        "efficient",
+        "etc.",
+        "fast",
+        "flexible",
+        "frequently",
+        "good",
+        "high",
+        "handle",
+        "if practical",
+        "if possible",
+        "including but not limited to",
+        "instead of",
+        "large",
+        "latest",
+        "long",
+        "low",
+        "maximize",
+        "may",
+        "minimize",
+        "modern",
+        "normal",
+        "optimize",
+        "possibly",
+        "provide for",
+        "rapid",
+        "recent",
+        "robust",
+        "seamless",
+        "should",
+        "significant",
+        "small",
+        "state-of-the-art",
+        "strong",
+        "support",
+        "timely",
+        "user-friendly",
+        "quickly"
+      ]
+    },
+    "passive_voice": {
+      "enabled": true,
+      "penalty": 10
+    },
+    "incompleteness": {
+      "enabled": true,
+      "penalty": 25
+    },
+    "singularity": {
+      "enabled": true,
+      "penalty": 20
+    },
+    "binding_modal": {
+      "enabled": true,
+      "penalty": 8,
+      "non_binding_words": [
+        "will",
+        "would",
+        "can",
+        "could",
+        "may",
+        "should"
+      ]
+    },
+    "measurability": {
+      "enabled": true,
+      "penalty": 12,
+      "weak_verbs": [
+        "provide",
+        "allow",
+        "enable",
+        "support",
+        "capable",
+        "capable of"
+      ],
+      "number_unit_regex": "\\b\\d+(?:\\.\\d+)?\\s*(ms|s|min|h|%|m|km|ft|nm|Hz|kHz|MHz|GHz|°C|C|K|V|A|W|g|kg|MB|GB|dB|bps|kbps|Mbps|ppm)\\b"
+    },
+    "alert_triggers": {
+      "enabled": true,
+      "penalty": 12,
+      "alert_words": [
+        "alert",
+        "warning",
+        "caution",
+        "annunciate",
+        "annunciation"
+      ],
+      "trigger_words": [
+        "when",
+        "if",
+        "upon",
+        "on detection",
+        "within",
+        "after",
+        "exceed",
+        "exceedance",
+        "failure",
+        "fault"
+      ]
+    }
+  }
+}

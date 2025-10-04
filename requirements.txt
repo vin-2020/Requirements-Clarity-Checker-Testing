@@ -1,0 +1,7 @@
+streamlit
+python-docx
+wordcloud
+matplotlib
+spacy
+pandas
+google-generativeai

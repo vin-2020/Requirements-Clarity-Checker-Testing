@@ -1,7 +1,15 @@
-streamlit
-python-docx
-wordcloud
-matplotlib
-spacy
-pandas
-google-generativeai
+# --- core app deps ---
+streamlit==1.38.0
+python-docx==1.1.0
+wordcloud==1.9.3
+matplotlib==3.9.2
+pandas==2.2.2
+google-generativeai==0.8.3
+
+# --- compatibility pins for spaCy 3.7 on Python 3.11 ---
+numpy==1.26.4          # avoids NumPy 2.x ABI changes
+thinc==8.2.5           # matches spaCy 3.7.x
+spacy==3.7.4
+
+# --- spaCy English model (must be underscores, no comments on this line) ---
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl

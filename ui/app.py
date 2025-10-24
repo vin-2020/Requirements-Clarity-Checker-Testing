@@ -9,6 +9,7 @@ import pandas as pd
 import inspect
 import importlib
 import sqlite3  # <-- to catch IntegrityError
+from typing import Optional
 
 # ---- Feature flags ----
 ENABLE_FLOATING_CHAT = False  # keep inline, not floating
@@ -55,7 +56,6 @@ get_chatbot_response = getattr(
     ),
 )
 
-
 decompose_requirement_with_ai = getattr(
     ai, "decompose_requirement_with_ai",
     lambda api_key, requirement_text: "Decomposition helper failed to load."
@@ -72,6 +72,59 @@ except Exception:
 from db.database import init_db, add_project, get_all_projects  # type: ignore
 from db import database as db  # type: ignore
 db = importlib.reload(db)
+
+# ---------------------- Theme from config.toml helpers ----------------------
+def _hex_to_rgb(h: str):
+    s = (h or "").lstrip("#")
+    if len(s) == 3:
+        s = "".join(c*2 for c in s)
+    try:
+        return int(s[0:2], 16), int(s[2:4], 16), int(s[4:6], 16)
+    except Exception:
+        return (0, 0, 0)
+
+def _is_light_bg(hex_color: str) -> bool:
+    r, g, b = _hex_to_rgb(hex_color)
+    # perceived luminance (ITU-R BT.601)
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 186
+
+def _font_stack_from_config(name: str) -> str:
+    name = (name or "").strip().lower()
+    if name == "serif":
+        return 'Georgia, "Times New Roman", serif'
+    if name == "monospace":
+        return 'SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
+    # default "sans serif"
+    return 'Inter, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+
+def _theme_from_config() -> dict:
+    primary = st.get_option("theme.primaryColor") or "#4F46E5"
+    bg = st.get_option("theme.backgroundColor") or "#111827"
+    secondary = st.get_option("theme.secondaryBackgroundColor") or "#1F2937"
+    text = st.get_option("theme.textColor") or "#F9FAFB"
+    font_name = st.get_option("theme.font") or "sans serif"
+    light = _is_light_bg(bg)
+    border = "rgba(0,0,0,.12)" if light else "rgba(255,255,255,.14)"
+    muted = "rgba(0,0,0,.55)" if light else "rgba(255,255,255,.7)"
+    return {
+        "primary": primary,
+        "bg": bg,
+        "secondary": secondary,
+        "text": text,
+        "border": border,
+        "muted": muted,
+        "font_stack": _font_stack_from_config(font_name),
+    }
+
+# --- API key validator (Google AI Studio keys commonly start with "AIza") ---
+def is_valid_google_key(k: str) -> bool:
+    k = (k or "").strip()
+    if not k:
+        return False
+    if not k.startswith("AIza"):
+        return False
+    # heuristic: length + safe chars
+    return 30 <= len(k) <= 120 and re.fullmatch(r"[A-Za-z0-9_\-]+", k) is not None
 
 # ========================= Helpers for Analyzer =========================
 def _read_docx_text_and_rows(uploaded_file):
@@ -173,10 +226,9 @@ def extract_requirements_from_file(uploaded_file):
 def format_requirement_with_highlights(req_id, req_text, issues):
     highlighted_text = req_text
 
-    # --- ambiguity highlighting (supports labeled tokens like "Non-binding modal: will") ---
+    # --- ambiguity highlighting ---
     if issues.get('ambiguous'):
         for token in issues['ambiguous']:
-            # If token has a label, highlight the tail word/phrase
             word = token.split(":", 1)[1].strip() if ":" in token else token
             if not word:
                 word = token
@@ -213,8 +265,7 @@ def format_requirement_with_highlights(req_id, req_text, issues):
         f'border-radius:5px;margin-bottom:10px;">{display_html}</div>'
     )
 
-
-def safe_call_ambiguity(text: str, engine: RuleEngine | None):
+def safe_call_ambiguity(text: str, engine: Optional['RuleEngine']):
     """
     Prefer the JSON-driven RuleEngine.check_ambiguity() so new rules apply.
     Record which path was used for quick diagnostics.
@@ -244,9 +295,7 @@ def safe_call_ambiguity(text: str, engine: RuleEngine | None):
         st.session_state["dbg_ambiguity_error"] = f"legacy: {e}"
         return []
 
-
-
-def safe_clarity_score(total_reqs: int, results: list[dict], issue_counts=None, engine: RuleEngine | None = None):
+def safe_clarity_score(total_reqs: int, results: list[dict], issue_counts=None, engine: Optional['RuleEngine']=None):
     try:
         sig = inspect.signature(calculate_clarity_score)
         if len(sig.parameters) >= 3:
@@ -306,6 +355,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# -- small utility styles used by analyzer outputs (unchanged app logic) --
 st.markdown("""
 <style>
     .req-container { padding:10px;border-radius:5px;margin-bottom:10px;border:1px solid #ddd; }
@@ -317,91 +367,93 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Instantiate RuleEngine **before** using it in diagnostics
-from pathlib import Path
-from core.rule_engine import RuleEngine
-
-# Point exactly to your file
-RULES_PATH = Path(r"C:\Users\vinodh\OneDrive\Desktop\REQCHECKCODE_BACKUP\data\default_rules.json")
-rule_engine = RuleEngine(str(RULES_PATH))
-
-
-
-with st.sidebar:
-    # Top: logo
-    st.image(
-        "https://github.com/vin-2020/Requirements-Clarity-Checker/blob/main/ReqCheck_Logo.png?raw=true",
-        use_container_width=True
-    )
-
-    # Catchphrase (pick one from below)
-    st.markdown("**Clarity in requirements. Confidence in delivery.**")
-
-    # --- CSS: make sidebar a full-height flex column
-    st.markdown("""
+# ---- Theme backbone (colors now come from config.toml) ----
+def apply_theme_vars():
+    t = _theme_from_config()
+    st.markdown(f"""
     <style>
-      section[data-testid="stSidebar"] .stSidebarContent {
-        display: flex;                /* column layout */
-        flex-direction: column;
-        min-height: 100vh;            /* fill viewport height */
-      }
-      .sb-spacer {
-        flex: 1 1 auto;               /* invisible flexible spacer */
-      }
-      /* Optional: guarantee some space even on very short viewports */
-      .sb-spacer.min { min-height: 30vh; }  /* tweak 30vh as you like */
-
-      #sb-footer {
-        padding-top: .75rem;
-        border-top: 1px solid rgba(0,0,0,.08);
-      }
-      #sb-footer a { text-decoration: none; }
-      #sb-footer a:hover { text-decoration: underline; }
+      :root {{
+        --rc-primary: {t['primary']};
+        --rc-bg: {t['bg']};
+        --rc-bg-2: {t['secondary']};
+        --rc-text: {t['text']};
+        --rc-border: {t['border']};
+        --rc-muted: {t['muted']};
+      }}
+      html, body, [data-testid="stAppViewContainer"] {{
+        background: var(--rc-bg) !important;
+        color: var(--rc-text) !important;
+        font-family: {t['font_stack']} !important;
+      }}
+      a, a:visited {{ color: var(--rc-primary) !important; }}
     </style>
     """, unsafe_allow_html=True)
 
-    # (Place any future sidebar controls ABOVE the spacer)
+apply_theme_vars()  # Apply once on load
 
-    # Invisible spacer that expands to push footer down
-    st.markdown("<div class='sb-spacer min'></div>", unsafe_allow_html=True)
+# ---- Single API Key Card (status + input + link) ----
+if "api_key" not in st.session_state:
+    st.session_state.api_key = ""
 
-    # Footer (pinned at the bottom)
-    st.markdown("""
-    <div id="sb-footer">
-      <h4 style="margin-bottom:.5rem;">Project Links</h4>
-      <div><a href="https://github.com/vin-2020/Requirements-Clarity-Checker" target="_blank">GitHub Repository</a></div>
-      <div><a href="https://www.incose.org/products-and-publications/se-handbook" target="_blank">INCOSE Handbook</a></div>
-      <h4 style="margin:.75rem 0 .25rem 0;">Contact</h4>
-      <div>📧 <b>reqcheck.dev@gmail.com</b></div>
-    </div>
-    """, unsafe_allow_html=True)
+typed_key = st.session_state.get("api_key_global", st.session_state.get("api_key", ""))
+is_connected = is_valid_google_key(typed_key)
 
+# Card styling (scoped)
+st.markdown("""
+<style>
+.api-card {
+  background: var(--rc-bg-2);
+  border: 1px solid var(--rc-border);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 6px 0 14px;
+}
+.api-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; }
+.status-pill {
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px;
+  border-radius: 999px; font-weight:700; font-size:13px; border:1px solid var(--rc-border);
+}
+.status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+.status-ok  { background:#DCFCE7; color:#065F46; border-color:rgba(16,185,129,.35); }
+.status-ok .status-dot { background:#10B981; }
+.status-bad { background:#FEF3C7; color:#92400E; border-color:rgba(234,179,8,.35); }
+.status-bad .status-dot { background:#EAB308; }
+.api-help { margin-top: 8px; opacity:.85; }
+</style>
+""", unsafe_allow_html=True)
 
-st.title("✨ ReqCheck: AI-Powered Requirements Assistant")
-
-# ✅ Initialize the database on first run (DB memory)
-init_db()
-
-# Single API key stored globally
-if 'api_key' not in st.session_state:
-    st.session_state.api_key = ''
-api_key_input = st.text_input(
-    "Enter your Google AI API Key to enable AI features:",
-    type="password",
-    value=st.session_state.api_key,
-    key="api_key_global"
-)
-if api_key_input:
-    st.session_state.api_key = api_key_input
+with st.container(border=False):
+    st.markdown('<div class="api-card">', unsafe_allow_html=True)
+    st.markdown('<div class="api-row">', unsafe_allow_html=True)
+    # Left: status pill
+    pill_class = "status-ok" if is_connected else "status-bad"
+    pill_text  = "Connected" if is_connected else "Disconnected"
+    st.markdown(
+        f'<div class="status-pill {pill_class}"><span class="status-dot"></span>{pill_text}</div>',
+        unsafe_allow_html=True
+    )
+    # Middle: API key input
+    st.text_input(
+        "API key",
+        key="api_key_global",
+        value=typed_key,
+        type="password",
+        label_visibility="collapsed",
+        help="Your key stays in this session only."
+    )
+    st.session_state.api_key = st.session_state.api_key_global
+    # Right: link button
+    st.link_button("Get key — Google AI Studio", "https://aistudio.google.com/", use_container_width=False)
+    st.markdown('</div>', unsafe_allow_html=True)  # /.api-row
+    st.markdown(' <div class="api-help">Tip: paste a key starting with <code>AIza</code> to connect.</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)  # /.api-card
 
 # Track selected project globally
 if 'selected_project' not in st.session_state:
     st.session_state.selected_project = None
-st.markdown("Get your free API key from [Google AI Studio](https://aistudio.google.com/).")
 
 # One RuleEngine instance (real or stub)
 rule_engine = RuleEngine()
-
 
 # ======================= Layout: main + right panel =======================
 main_col, right_col = st.columns([4, 1], gap="large")
@@ -557,7 +609,126 @@ with right_col:
         except Exception as e:
             st.error(f"Quick Chat failed to load: {e}")
 
-# ------------------------------ Main Tabs (LEAN) ------------------------------
+# --- Website-like global navbar (logo left, tabs right) ---
+st.markdown("""
+<style>
+/* === NAVBAR (fixed top) === */
+.rc-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999; /* keep it above everything */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 24px 34px;
+  background: var(--rc-bg);
+  border-bottom: 1px solid var(--rc-border);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* Override Streamlit’s default header offset */
+[data-testid="stHeader"] { z-index: 0 !important; }
+ 
+/* Push app content below fixed navbar */
+body, [data-testid="stAppViewContainer"] > div:first-child {
+  padding-top: 90px !important; /* was 60px */
+}
+ 
+ /* Brand (left) */
+ .rc-brand { display:flex; align-items:center; gap:14px; }
+ .rc-logo { height: 40px; width:auto; border-radius:12px; }
+ .rc-name {
+   font-family: "Poppins", Inter, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+   font-weight: 800; font-size: 22px;
+   background: linear-gradient(90deg, var(--rc-primary), #22D3EE);
+   -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+   letter-spacing: .3px;
+ }
+ /* Menu (right) */
+ .rc-menu { display:flex; align-items:center; gap: 18px; flex-wrap: wrap; }
+ .rc-link {
+   display:inline-flex; align-items:center; gap:8px;
+   font-weight: 600; font-size: 15px; color: var(--rc-text);
+   text-decoration: none; cursor: pointer; position: relative; padding: 6px 2px;
+ }
+ .rc-link:hover { color: var(--rc-primary); }
+ /* Active underline */
+ .rc-link.active::after {
+   content:""; position:absolute; left:0; right:0; bottom:-8px;
+   height: 3px; background: var(--rc-primary); border-radius: 4px;
+ }
+ @media (max-width: 800px) { .rc-menu { gap: 12px; } }
+</style>
+ 
+<div class="rc-navbar">
+  <div class="rc-brand">
+    <img class="rc-logo" src="https://github.com/vin-2020/Requirements-Clarity-Checker/blob/main/ReqCheck_Logo.png?raw=true" alt="ReqCheck"/>
+    <div class="rc-name">ReqCheck</div>
+  </div>
+  <nav class="rc-menu" id="rc-menu">
+    <a class="rc-link" data-tab="0">🏠 Home</a>
+    <a class="rc-link" data-tab="1">📄 Analyzer</a>
+    <a class="rc-link" data-tab="2">💡 Need→Req</a>
+    <a class="rc-link" data-tab="3">💬 Chatbot</a>
+  </nav>
+</div>
+""", unsafe_allow_html=True)
+
+with main_col:
+    tab_home, tab_analyze, tab_need, tab_chat = st.tabs([
+        "🏠 Home",
+        "📄 Document Analyzer",
+        "💡 Need-to-Requirement Helper",
+        "💬 Requirements Chatbot",
+    ])
+
+    # Hide Streamlit's default tab strip — we will drive tabs via the navbar
+    st.markdown("""
+    <style> div[role="tablist"] { display: none !important; } </style>
+    """, unsafe_allow_html=True)
+
+    # Wire navbar clicks to hidden tabs + keep active highlight in sync
+    from streamlit.components.v1 import html as _html
+    _html("""
+    <script>
+    (function(){
+      const P = window.parent || window;
+      const doc = P.document;
+      function getTabs(){ return Array.from(doc.querySelectorAll('button[role="tab"]')); }
+      function setActive(idx){
+        const links = doc.querySelectorAll('.rc-menu .rc-link');
+        links.forEach(el => el.classList.remove('active'));
+        if (links[idx]) links[idx].classList.add('active');
+      }
+      // Click on navbar -> click hidden tab
+      doc.querySelectorAll('.rc-menu .rc-link').forEach(link=>{
+        link.addEventListener('click', ()=>{
+          const idx = Number(link.getAttribute('data-tab')) || 0;
+          const tabs = getTabs();
+          if (tabs[idx] && typeof tabs[idx].click === 'function') tabs[idx].click();
+          setActive(idx);
+        }, {passive:true});
+      });
+      // Init active state
+      setActive(0);
+      // Observe tab selection changes (keyboard, code, etc.)
+      const tablist = doc.querySelector('div[role="tablist"]');
+      if (tablist && 'MutationObserver' in P){
+        new MutationObserver(()=>{
+          const tabs = getTabs();
+          const activeIdx = tabs.findIndex(b => b.getAttribute('aria-selected') === 'true');
+          if (activeIdx >= 0) setActive(activeIdx);
+        }).observe(tablist, { attributes:true, subtree:true, attributeFilter:['aria-selected','class'] });
+      }
+    })();
+    </script>
+    """, height=0)
+
+# ------------------------------ Main Tabs (LEAN loader) ------------------------------
 home_tab = analyzer_tab = needs_tab = chat_tab = None
 
 try:
@@ -583,14 +754,6 @@ try:
     chat_tab = importlib.reload(_chat_tab)
 except Exception as e:
     st.error(f"Chat tab failed to import: {e}")
-
-with main_col:
-    tab_home, tab_analyze, tab_need, tab_chat = st.tabs([
-        "🏠 Home",
-        "📄 Document Analyzer",
-        "💡 Need-to-Requirement Helper",
-        "💬 Requirements Chatbot",
-    ])
 
 CTX = {
     "HAS_AI_PARSER": HAS_AI_PARSER,
@@ -638,3 +801,31 @@ with tab_chat:
         chat_tab.render(st, db, rule_engine, CTX)
     else:
         st.error("Chat tab not available.")
+
+# ------------------------------ Footer (useful links at bottom) ------------------------------
+st.markdown("""
+<style>
+.footer {
+  margin-top: 40px;
+  padding: 16px 0;
+  border-top: 1px solid var(--rc-border);
+  text-align: center;
+  font-size: 14px;
+  opacity: 0.95;
+}
+.footer a {
+  color: var(--rc-primary) !important;
+  font-weight: 600;
+  text-decoration: none;
+  margin: 0 10px;
+}
+.footer a:hover { text-decoration: underline; }
+</style>
+
+<div class="footer">
+  <a href="https://aistudio.google.com/" target="_blank">Google AI Studio</a> •
+  <a href="https://github.com/vin-2020/Requirements-Clarity-Checker" target="_blank">GitHub</a> •
+  <a href="https://www.incose.org/products-and-publications/se-handbook" target="_blank">INCOSE Handbook</a> •
+  <a href="mailto:reqcheck.dev@gmail.com">Contact</a>
+</div>
+""", unsafe_allow_html=True)

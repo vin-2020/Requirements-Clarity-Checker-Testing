@@ -1,0 +1,41 @@
+/* Global accent gradients */
+:root {
+    --violet: #8B5CF6;
+    --cyan: #22D3EE;
+}
+
+/* Buttons & links */
+.stButton>button {
+    background: linear-gradient(135deg, var(--violet), var(--cyan)) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 10px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s ease !important;
+}
+
+.stButton>button:hover {
+    filter: brightness(1.15);
+    box-shadow: 0 0 10px rgba(229, 227, 233, 0.5);
+}
+
+/* Navbar links (if using .nav-link) */
+.nav-link {
+    background: rgba(206, 16, 16, 0.05);
+    border-radius: 10px;
+    padding: .5rem .75rem;
+    cursor: pointer;
+    color: var(--text, #0829ac);
+    transition: background 0.25s, color 0.25s;
+}
+
+.nav-link:hover {
+    background: linear-gradient(135deg, var(--violet), var(--cyan));
+    color: white;
+}
+
+/* Sidebar + containers */
+section[data-testid="stSidebar"] {
+    background: #111834 !important;
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.08);
+}

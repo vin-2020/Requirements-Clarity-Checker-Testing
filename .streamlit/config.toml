@@ -1,15 +1,7 @@
 [theme]
-# This is the main color for buttons, sliders, etc.
-primaryColor="#6C63FF"  # A vibrant, friendly purple
-
-# The main background color of the app
-backgroundColor="#F0F2F6" # A very light, clean grey
-
-# The background color of the sidebar and other secondary elements
-secondaryBackgroundColor="#FFFFFF" # A crisp white for contrast
-
-# The main text color
-textColor="#262730" # A dark, readable charcoal
-
-# The font style
-font="sans serif"
+base = "light"
+primaryColor = "#2563EB"              # balanced blue accent
+backgroundColor = "#FAFAFA"           # off-white canvas
+secondaryBackgroundColor = "#F0F2F5"  # subtle gray for side panels
+textColor = "#111827"                 # rich black text
+font = "sans serif"
